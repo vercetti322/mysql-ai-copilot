@@ -1,6 +1,5 @@
-from mysql_ai_copilot.ai import chat
+from mysql_ai_copilot.utils import Conversation
 import mforms
-import threading
 
 USER = "USER"
 ASSISTANT = "ASSISTANT"
@@ -18,27 +17,9 @@ AI_MESSAGE_VERTICAL_SPACING = 0
 AI_CHAT_FONT = 'Tahoma 12'
 AI_MESSAGE_FONT = 'Tahoma 10'
 
-class Conversation:
-    def __init__(self, on_ai_response):
-        self.messages = []
-        self.on_ai_response = on_ai_response
-        self.is_processing = False
-
-    def submit(self, prompt):
-        if self.is_processing: return
-        self.is_processing = True
-        
-        self.messages.append({"role": USER, "content": prompt})
-        # assigns the task to call ai on a separate thread to not block UI
-        threading.Thread(target=self.call_ai, daemon=True).start()
-    
-    def call_ai(self):
-        response = chat(self.messages)
-        self.messages.append({"role": ASSISTANT, "content": response})
-
-        self.is_processing = False
-        self.on_ai_response(response)
-
+AI_BACKGROUND_HEADING_TEXT = 'MySQL AI Copilot'
+AI_BACKGROUND_HEADING_FONT = 'Tahoma 32'
+AI_BACKGROUND_HEADING_COLOR = '#333333'
 
 class ChatWindow(mforms.AppView):
     def __init__(self, chat_id):
@@ -51,13 +32,20 @@ class ChatWindow(mforms.AppView):
         self.chat = mforms.newBox(False)
         self.chat.set_spacing(AI_MESSAGE_VERTICAL_SPACING)
 
+        self.background_heading = self.create_background_heading()
         self.scroll = mforms.newScrollPanel()
+
+        self.chat_container = mforms.newBox(False)
+        self.chat_container.set_padding(20, 0, 20, 0)
+        self.chat_container.add(self.scroll, True, True)
+
         self.scroll.add(self.chat)
-
         self.input_box, self.input = self.create_text_box()
-        self.add(self.scroll, True, True)
 
+        self.add(self.background_heading, False, True)
+        self.add(self.chat_container, True, True)
         self.add(self.input_box, False, True)
+
         self.conversation = Conversation(self.on_ai_response)
 
     def on_ai_response(self, response):
@@ -68,25 +56,48 @@ class ChatWindow(mforms.AppView):
         # the AI response is applied to UI on MForms thread
         mforms.Utilities.perform_from_main_thread(update_ui, False)
 
+    def create_background_heading(self):
+        container = mforms.newBox(False)
+        container.set_padding(0, 0, 0, 16)
+
+        heading = mforms.newLabel(AI_BACKGROUND_HEADING_TEXT)
+        heading.set_text_align(mforms.MiddleCenter)
+        
+        heading.set_font(AI_BACKGROUND_HEADING_FONT)
+        heading.set_color(AI_BACKGROUND_HEADING_COLOR)
+
+        container.add(heading, True, True)
+        return container
+    
     def add_message(self, role, content):
         row = mforms.newBox(True)
         message = mforms.newBox(False)
-        
-        message.set_padding(AI_MESSAGE_INTERNAL_PADDING)
+
         label = mforms.newLabel(content)
-        
         label.set_font(AI_MESSAGE_FONT)
+
         message.add(label, False, True)
+        # Internal padding: left, top, right, bottom
+        message.set_padding(12, 12, 12, 12)
 
         if role == "USER":
             message.set_back_color(AI_USER_MESSAGE_COLOR)
+            # Limit the bubble to 25% of the row's width.
+            max_width = int(row.get_width() * 0.25)
 
-        row.add(message, True, True)
+            message.set_size(max_width, -1)
+            spacer = mforms.newBox(False)
+            
+            row.add(spacer, True, True)
+            row.add(message, False, True)
+        else:
+            row.add(message, True, True)
+
         self.chat.add(row, False, True)
 
     def create_text_box(self):
         row = mforms.newBox(True)
-        row.set_padding(20, 0, 20, 8)
+        row.set_padding(20, 8, 20, 8)
 
         text_box = mforms.newTextEntry(False)
         text_box.set_font(AI_CHAT_FONT)
@@ -102,13 +113,10 @@ class ChatWindow(mforms.AppView):
 
     def on_submit(self, *_):
         prompt = self.input.get_string_value().strip()
-        if not prompt:
-            return
+        if not prompt: return
 
-        if self.conversation.is_processing:
-            return
-
+        if self.conversation.is_processing: return
         self.add_message(USER, prompt)
+
         self.input.set_value("")
-        
         self.conversation.submit(prompt)

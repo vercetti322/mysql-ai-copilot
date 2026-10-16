@@ -1,6 +1,10 @@
+# disable __pycache__
+import sys
+sys.dont_write_bytecode = True
+
 # MySQL Copilot Chat Plugin
 from wb import *
-import mforms, grt, uuid
+import mforms, grt, uuid, os, shutil
 
 _chat_window = None
 _chat_dock = None
@@ -27,7 +31,7 @@ def chat_window(editor):
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     from mysql_ai_copilot import ChatWindow
 
-    # get the docing point reference for the current editor
+    # get the docking point reference for the current editor
     d_point = mforms.fromgrt(editor.dockingPoint)
     chat_view_exists = False
 
